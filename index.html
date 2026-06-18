@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AirTime — Global Leaderboard</title>
+  <style>
+    :root { --bg:#0a0e1a; --bg2:#1a1b3a; --accent:#3dd4ff; --text:#fff; --muted:rgba(255,255,255,.6); }
+    * { box-sizing:border-box; }
+    body {
+      margin:0; min-height:100vh; color:var(--text);
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+      background:linear-gradient(180deg,var(--bg2),var(--bg));
+      display:flex; flex-direction:column; align-items:center; padding:32px 16px;
+    }
+    h1 { font-size:2.6rem; font-weight:800; margin:.2em 0 0; }
+    .sub { color:var(--muted); margin-bottom:24px; }
+    table { width:100%; max-width:560px; border-collapse:collapse; }
+    th, td { text-align:left; padding:12px 10px; border-bottom:1px solid rgba(255,255,255,.08); }
+    th { color:var(--muted); font-size:.8rem; text-transform:uppercase; letter-spacing:.05em; }
+    td.h { font-weight:700; font-variant-numeric:tabular-nums; text-align:right; }
+    th.h { text-align:right; }
+    .rank { width:42px; color:var(--muted); font-variant-numeric:tabular-nums; }
+    tr:first-child td { color:#ffd166; }
+    .crown { color:#ffd166; }
+    #status { color:var(--muted); margin-top:24px; }
+    footer { color:var(--muted); font-size:.8rem; margin-top:32px; }
+  </style>
+</head>
+<body>
+  <h1>AirTime</h1>
+  <div class="sub">Global Leaderboard — how high can you throw your phone?</div>
+
+  <table>
+    <thead><tr><th class="rank">#</th><th>Player</th><th class="h">Height</th></tr></thead>
+    <tbody id="rows"></tbody>
+  </table>
+  <div id="status">Loading…</div>
+  <footer>Made with AirTime · kaufkeinkack.com</footer>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
+    import { getFirestore, collection, query, orderBy, limit, getDocs }
+      from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+
+    // TODO: paste your Firebase web app config (Firebase console → Project
+    // settings → Your apps → Web). projectId is already filled in.
+    const firebaseConfig = {
+      apiKey: "REPLACE_ME",
+      authDomain: "airtime-4cdcb.firebaseapp.com",
+      projectId: "airtime-4cdcb",
+      storageBucket: "airtime-4cdcb.appspot.com",
+      messagingSenderId: "271693596466",
+      appId: "REPLACE_ME"
+    };
+
+    const rowsEl = document.getElementById("rows");
+    const statusEl = document.getElementById("status");
+
+    try {
+      const app = initializeApp(firebaseConfig);
+      const db = getFirestore(app);
+      const q = query(collection(db, "scores"), orderBy("heightMeters", "desc"), limit(100));
+      const snap = await getDocs(q);
+      if (snap.empty) { statusEl.textContent = "No throws yet — be the first!"; }
+      else {
+        statusEl.textContent = "";
+        let rank = 0;
+        snap.forEach(doc => {
+          rank++;
+          const d = doc.data();
+          const tr = document.createElement("tr");
+          tr.innerHTML =
+            `<td class="rank">${rank === 1 ? '<span class="crown">♔</span>' : rank}</td>` +
+            `<td>${(d.username || "anon").replace(/</g,"&lt;")}</td>` +
+            `<td class="h">${Number(d.heightMeters).toFixed(2)} m</td>`;
+          rowsEl.appendChild(tr);
+        });
+      }
+    } catch (e) {
+      statusEl.textContent = "Leaderboard unavailable. (" + e.message + ")";
+    }
+  </script>
+</body>
+</html>
