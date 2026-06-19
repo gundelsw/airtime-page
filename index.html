@@ -14,69 +14,100 @@
       display:flex; flex-direction:column; align-items:center; padding:32px 16px;
     }
     h1 { font-size:2.6rem; font-weight:800; margin:.2em 0 0; }
-    .sub { color:var(--muted); margin-bottom:24px; }
-    table { width:100%; max-width:560px; border-collapse:collapse; }
-    th, td { text-align:left; padding:12px 10px; border-bottom:1px solid rgba(255,255,255,.08); }
-    th { color:var(--muted); font-size:.8rem; text-transform:uppercase; letter-spacing:.05em; }
-    td.h { font-weight:700; font-variant-numeric:tabular-nums; text-align:right; }
-    th.h { text-align:right; }
+    .sub { color:var(--muted); margin-bottom:24px; text-align:center; }
+    .wrap { width:100%; max-width:620px; overflow-x:auto; }
+    table { width:100%; border-collapse:collapse; }
+    th, td { padding:11px 8px; border-bottom:1px solid rgba(255,255,255,.08); text-align:left; white-space:nowrap; }
+    th { color:var(--muted); font-size:.72rem; text-transform:uppercase; letter-spacing:.05em; }
+    .num { text-align:right; font-variant-numeric:tabular-nums; }
+    td.h { font-weight:700; color:var(--accent); }
+    .air { color:var(--accent); }
     .rank { width:42px; color:var(--muted); font-variant-numeric:tabular-nums; }
-    tr:first-child td { color:#ffd166; }
+    tr.top td { color:#ffd166; }
+    tr.top td.h, tr.top td.air { color:#ffd166; }
     .crown { color:#ffd166; }
+    .flash { animation: flash 1.2s ease-out; }
+    @keyframes flash { from { background:rgba(61,212,255,.25); } to { background:transparent; } }
     #status { color:var(--muted); margin-top:24px; }
     footer { color:var(--muted); font-size:.8rem; margin-top:32px; }
+    .live { display:inline-block; width:8px; height:8px; border-radius:50%; background:#3dd4ff; margin-right:6px; animation: pulse 1.6s infinite; }
+    @keyframes pulse { 0%,100% { opacity:.3 } 50% { opacity:1 } }
   </style>
 </head>
 <body>
   <h1>AirTime</h1>
-  <div class="sub">Global Leaderboard — how high can you throw your phone?</div>
+  <div class="sub">Global Leaderboard — how high can you throw your phone?<br>
+    <span style="font-size:.85rem"><span class="live"></span>live</span></div>
 
-  <table>
-    <thead><tr><th class="rank">#</th><th>Player</th><th class="h">Height</th></tr></thead>
-    <tbody id="rows"></tbody>
-  </table>
+  <div class="wrap">
+    <table>
+      <thead><tr>
+        <th class="rank">#</th><th>Player</th>
+        <th class="num">Height</th><th class="num">Air time</th><th class="num">Spins</th>
+      </tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
   <div id="status">Loading…</div>
   <footer>Made with AirTime · kaufkeinkack.com</footer>
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
-    import { getFirestore, collection, query, orderBy, limit, getDocs }
+    import { getFirestore, collection, query, orderBy, limit, onSnapshot }
       from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
 
-    // TODO: paste your Firebase web app config (Firebase console → Project
-    // settings → Your apps → Web). projectId is already filled in.
+    // Firebase project airtime-4cdcb. apiKey is the project key (also public in
+    // the app's GoogleService-Info.plist). If the board shows "unavailable",
+    // remove API-key restrictions in Google Cloud console or paste a Web-app key.
     const firebaseConfig = {
-      apiKey: "REPLACE_ME",
+      apiKey: "AIzaSyDEVjj9EnVSI0ou0SdgmtAkjZKOqOB0nFc",
       authDomain: "airtime-4cdcb.firebaseapp.com",
       projectId: "airtime-4cdcb",
       storageBucket: "airtime-4cdcb.firebasestorage.app",
       messagingSenderId: "271693596466",
-      appId: "REPLACE_ME"
+      appId: "1:271693596466:web:airtime"
     };
 
     const rowsEl = document.getElementById("rows");
     const statusEl = document.getElementById("status");
+    const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+    let seen = new Set();
 
     try {
       const app = initializeApp(firebaseConfig);
       const db = getFirestore(app);
       const q = query(collection(db, "scores"), orderBy("heightMeters", "desc"), limit(100));
-      const snap = await getDocs(q);
-      if (snap.empty) { statusEl.textContent = "No throws yet — be the first!"; }
-      else {
+
+      // Live updates: re-render whenever Firestore changes.
+      onSnapshot(q, (snap) => {
+        if (snap.empty) { statusEl.textContent = "No throws yet — be the first!"; rowsEl.innerHTML = ""; return; }
         statusEl.textContent = "";
+        rowsEl.innerHTML = "";
         let rank = 0;
+        const nextSeen = new Set();
         snap.forEach(doc => {
           rank++;
           const d = doc.data();
+          nextSeen.add(doc.id);
+          const isNew = !seen.has(doc.id) && seen.size > 0;   // highlight freshly added rows
           const tr = document.createElement("tr");
+          if (rank === 1) tr.className = "top";
+          if (isNew) tr.classList.add("flash");
+          const height = Number(d.heightMeters || 0).toFixed(2);
+          const air = Number(d.airTime || 0).toFixed(2);
+          const spins = Number(d.spins || 0).toFixed(1);
           tr.innerHTML =
             `<td class="rank">${rank === 1 ? '<span class="crown">♔</span>' : rank}</td>` +
-            `<td>${(d.username || "anon").replace(/</g,"&lt;")}</td>` +
-            `<td class="h">${Number(d.heightMeters).toFixed(2)} m</td>`;
+            `<td>${esc(d.username || "anon")}</td>` +
+            `<td class="num h">${height} m</td>` +
+            `<td class="num air">${air} s</td>` +
+            `<td class="num">${spins}</td>`;
           rowsEl.appendChild(tr);
         });
-      }
+        seen = nextSeen;
+      }, (err) => {
+        statusEl.textContent = "Leaderboard unavailable. (" + err.message + ")";
+      });
     } catch (e) {
       statusEl.textContent = "Leaderboard unavailable. (" + e.message + ")";
     }
